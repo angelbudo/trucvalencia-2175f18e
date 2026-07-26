@@ -521,6 +521,9 @@ export function botDecide(
   const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
   if (thirdSeatMatrix) return thirdSeatMatrix;
 
+  const thirdSeatFirst = applyThirdSeatFirstBaza(m, player, hints);
+  if (thirdSeatFirst) return thirdSeatFirst;
+
   let decision = botDecideInner(m, player, partnerAdvice, hints, tuning, bluffRate);
   if (!decision) return decision;
   decision = enforceStrictConservativeLimits(m, player, decision);
