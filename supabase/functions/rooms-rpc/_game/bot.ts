@@ -325,6 +325,22 @@ function applyThirdSeatSecondBazaWonFirst(
     );
   };
 
+  // ===== Regla 1 (PRIORITAT ABSOLUTA): el rival va guanyant la 2a baza
+  // amb un 3 i jo tinc un 3 a la mà → EMPARDAR OBLIGATÒRIAMENT amb el 3.
+  // Havent guanyat la 1a baza, empardar la 2a ja tanca la mà a favor
+  // del nostre equip. Excepció: si també tinc alguna carta TOP, els
+  // casos 2/3/4/5 de la matriu ho gestionen (tapar/trucar), així que
+  // deixem passar. =====
+  if (
+    !partnerWinsOrTies &&
+    oppCard.card.rank === 3 &&
+    hasThree &&
+    !hasTop
+  ) {
+    const play = findPlay(lowestThree!.id);
+    if (play) return play;
+  }
+
   // Cas 1: 2 TOP i una d'elles és la més alta viva → TAPAR l'altra TOP.
   if (nTops === 2 && iHaveHighestAliveTop) {
     const other = lowestOtherTop(myHighestTop!);
