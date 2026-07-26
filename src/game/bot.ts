@@ -2619,6 +2619,61 @@ function decideTrucResponse(
 ): Action {
   const r = m.round;
   const myTeam = teamOf(player);
+  // ==== VICTÒRIA 100% GARANTITZADA ====
+  // Si tinc a la mà la carta més alta VIVA de truc (la més forta que
+  // encara no s'ha jugat en tota la partida) i, donada la situació de
+  // bazes, guanyar la resta de la mà està assegurat, MAI rebutjar el
+  // truc: escalar al màxim legal (joc-fora > quatre > retruc) o "vull".
+  if (r.trucState.kind === "pending") {
+    const playedKeysG = new Set<string>();
+    for (const t of r.tricks) for (const tc of t.cards) {
+      playedKeysG.add(`${tc.card.rank}-${tc.card.suit}`);
+    }
+    const TOP_CARDS_G = [
+      { rank: 1, suit: "espases" },
+      { rank: 1, suit: "bastos" },
+      { rank: 7, suit: "espases" },
+      { rank: 7, suit: "oros" },
+    ] as const;
+    const aliveTopStrsG = TOP_CARDS_G
+      .filter((t) => !playedKeysG.has(`${t.rank}-${t.suit}`))
+      .map((t) => cardStrength({ rank: t.rank, suit: t.suit } as Card));
+    const maxAliveTopStrG = aliveTopStrsG.length > 0 ? Math.max(...aliveTopStrsG) : -1;
+    const iHaveMaxAliveTopG =
+      maxAliveTopStrG > 0 &&
+      (hand as Card[]).some((c) => cardStrength(c) === maxAliveTopStrG);
+    if (iHaveMaxAliveTopG) {
+      const t1G = r.tricks[0];
+      const wonFirstG =
+        !!t1G && t1G.parda !== true && t1G.winner !== undefined &&
+        teamOf(t1G.winner!) === myTeam;
+      const pardaFirstG = !!t1G && t1G.parda === true;
+      const t2G = r.tricks[1];
+      const wonSecondG =
+        !!t2G && t2G.parda !== true && t2G.winner !== undefined &&
+        teamOf(t2G.winner!) === myTeam;
+      const pardaSecondG = !!t2G && t2G.parda === true;
+      const trickIdxG = r.tricks.length; // 1, 2 o 3
+      let guaranteedG = false;
+      if (trickIdxG === 3) {
+        // Tinc la carta més forta viva → guanye la 3a. Guanye la mà si
+        // ja hem guanyat o empardat una baza prèvia.
+        guaranteedG = wonFirstG || pardaFirstG || wonSecondG || pardaSecondG;
+      } else if (trickIdxG === 2) {
+        // Guanyaré la 2a. Si ja tenim la 1a (o parda), guanyem la mà.
+        guaranteedG = wonFirstG || pardaFirstG;
+      }
+      if (guaranteedG) {
+        const escalations = ["joc-fora", "quatre", "retruc"] as const;
+        for (const what of escalations) {
+          const act = actions.find((a) => a.type === "shout" && a.what === what);
+          if (act) return act;
+        }
+        const vull = actions.find((a) => a.type === "shout" && a.what === "vull");
+        if (vull) return vull;
+      }
+    }
+  }
   // Regla absoluta: si l'equip que ha cantat el truc està a 1 punt de
   // tancar la cama (match point de cama), rebutjar el truc significa
   // donar-li el punt que necessita per guanyar la cama. Per tant, mai
