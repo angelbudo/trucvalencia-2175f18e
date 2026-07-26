@@ -1127,6 +1127,11 @@ export function botDecide(
   const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
   if (thirdSeatMatrix) return thirdSeatMatrix;
 
+  // MATRIU EXPLÍCITA de l'usuari (3r a tirar en la 1a baza). Prioritat
+  // absoluta sobre la resta de lògica.
+  const thirdSeatFirst = applyThirdSeatFirstBaza(m, player, hints);
+  if (thirdSeatFirst) return thirdSeatFirst;
+
   // REGLA ESTRICTA (2a baza, equip ha guanyat la 1a): arbre de decisió
   // definit per l'usuari amb prioritat absoluta sobre la resta de lògica.
   const strictSecond = applySecondTrickWonFirstStrict(m, player, hints);
