@@ -108,6 +108,230 @@ function canCallTrucSecondTrickConservative(
 }
 
 /**
+ * REGLA DE L'USUARI (matriu explícita) — Bot 3r a tirar en la 2a BAZA
+ * havent guanyat el seu equip la 1a baza.
+ *
+ * Precondicions estrictes: r.tricks.length === 2, la baza actual té
+ * exactament 2 cartes a la mesa, el bot encara no ha jugat en ella i li
+ * queden EXACTAMENT 2 cartes a la mà.
+ *
+ * Retorna l'Action a executar (jugar carta — potser tapada — o cantar
+ * truc) o null si la regla no aplica.
+ */
+function applyThirdSeatSecondBazaWonFirst(
+  m: MatchState,
+  player: PlayerId,
+  hints: BotHints,
+): Action | null {
+  const r = m.round;
+  if (r.phase !== "playing") return null;
+  if (r.tricks.length !== 2) return null;
+  const first = r.tricks[0];
+  const trick = r.tricks[1];
+  if (!first || !trick) return null;
+  if (first.parda === true || first.winner === undefined) return null;
+  const myTeam = teamOf(player);
+  if (teamOf(first.winner) !== myTeam) return null;
+  if (trick.cards.length !== 2) return null;
+  if (r.turn !== player) return null;
+  if (trick.cards.some((tc) => tc.player === player)) return null;
+  const hand = r.hands[player] ?? [];
+  if (hand.length !== 2) return null;
+
+  const partnerCard = trick.cards.find((tc) => teamOf(tc.player) === myTeam) ?? null;
+  const oppCard = trick.cards.find((tc) => teamOf(tc.player) !== myTeam) ?? null;
+  if (!partnerCard || !oppCard) return null;
+
+  const legals = legalActions(m, player);
+  const playActions = legals.filter(
+    (a): a is Extract<Action, { type: "play-card" }> => a.type === "play-card",
+  );
+  if (playActions.length === 0) return null;
+
+  const findPlay = (cardId: string, covered = false): Action | null => {
+    const exact = playActions.find(
+      (a) => a.cardId === cardId && !!a.covered === covered,
+    );
+    if (exact) return exact;
+    const any = playActions.find((a) => a.cardId === cardId);
+    if (!any) return null;
+    if (covered) return { type: "play-card", cardId, covered: true };
+    return any;
+  };
+
+  const partnerStr = cardStrength(partnerCard.card);
+  const oppStr = cardStrength(oppCard.card);
+  const partnerWinsOrTies = partnerStr >= oppStr;
+  const partnerPlayedTop = isTopCard(partnerCard.card);
+  const partnerPlayedThree = partnerCard.card.rank === 3;
+  const partnerPlayedTopOrThree = partnerPlayedTop || partnerPlayedThree;
+
+  const tops = hand.filter(isTopCard);
+  const threes = hand.filter((c) => c.rank === 3);
+  const hasTop = tops.length > 0;
+  const hasThree = threes.length > 0;
+  const nTops = tops.length;
+  const nThrees = threes.length;
+
+  const sortedAsc = [...hand].sort((a, b) => cardStrength(a) - cardStrength(b));
+  const lowest = sortedAsc[0]!;
+
+  // Cartes TOP encara vives fora de la meua mà (per saber si la meua és
+ // la més alta que queda per jugar en la partida).
+  const TOP_ITEMS: Card[] = [
+    { suit: "espases", rank: 1, id: "1-espases" },
+    { suit: "bastos", rank: 1, id: "1-bastos" },
+    { suit: "espases", rank: 7, id: "7-espases" },
+    { suit: "oros", rank: 7, id: "7-oros" },
+  ];
+  const playedIds = new Set<string>();
+  for (const t of r.tricks) for (const tc of t.cards) playedIds.add(tc.card.id);
+  const myIds = new Set(hand.map((c) => c.id));
+  let maxAliveTopOutside = -1;
+  for (const top of TOP_ITEMS) {
+    if (playedIds.has(top.id) || myIds.has(top.id)) continue;
+    const s = cardStrength(top);
+    if (s > maxAliveTopOutside) maxAliveTopOutside = s;
+  }
+  const myHighestTop = hasTop
+    ? tops.reduce((a, b) => (cardStrength(a) >= cardStrength(b) ? a : b))
+    : null;
+  const myMaxTopStr = myHighestTop ? cardStrength(myHighestTop) : -1;
+  const iHaveHighestAliveTop = hasTop && myMaxTopStr > maxAliveTopOutside;
+
+  const lowestThree = hasThree
+    ? threes.reduce((a, b) => (cardStrength(a) <= cardStrength(b) ? a : b))
+    : null;
+  const lowestOtherTop = (excluding: Card): Card | null => {
+    const others = tops.filter((c) => c.id !== excluding.id);
+    if (others.length === 0) return null;
+    return others.reduce((a, b) => (cardStrength(a) <= cardStrength(b) ? a : b));
+  };
+
+  const trucNotDecided =
+    r.trucState.kind !== "accepted" && r.trucState.kind !== "rejected";
+  const canShoutTruc = (): Action | null => {
+    if (!trucNotDecided || hints.silentTruc) return null;
+    return (
+      legals.find(
+        (a) =>
+          a.type === "shout" &&
+          (a.what === "truc" || a.what === "retruc" || a.what === "quatre"),
+      ) ?? null
+    );
+  };
+
+  // Cas 1: 2 TOP i una d'elles és la més alta viva → TAPAR l'altra TOP.
+  if (nTops === 2 && iHaveHighestAliveTop) {
+    const other = lowestOtherTop(myHighestTop!);
+    if (other) {
+      const act = findPlay(other.id, true);
+      if (act) return act;
+    }
+  }
+
+  // Cas 2: 1 TOP (la més alta viva) + 1 3 → TAPAR el 3.
+  if (nTops === 1 && nThrees === 1 && iHaveHighestAliveTop) {
+    const act = findPlay(threes[0]!.id, true);
+    if (act) return act;
+  }
+
+  // Cas 3: 2 TOP però cap és la més alta viva → TRUCAR abans de tirar.
+  if (nTops === 2 && !iHaveHighestAliveTop) {
+    const truc = canShoutTruc();
+    if (truc) return truc;
+    const play = findPlay(myHighestTop!.id);
+    if (play) return play;
+  }
+
+  // Cas 4: 1 TOP (no la més alta) + 1 3.
+  if (nTops === 1 && nThrees === 1 && !iHaveHighestAliveTop) {
+    if (partnerPlayedThree && partnerWinsOrTies) {
+      // Company ja ha tirat 3 i anem guanyant/empardant: com el 4t jugador
+      // (rival) hauria de decidir el truc abans de tirar, evitem el
+      // truc — tirem la TOP ara i guardem el 3 per a la 3a baza.
+      const play = findPlay(myHighestTop!.id);
+      if (play) return play;
+    } else if (!partnerWinsOrTies) {
+      // Anem perdent la 2a: primer intent de truc; si no, tirem el 3.
+      const truc = canShoutTruc();
+      if (truc) return truc;
+      const play = findPlay(threes[0]!.id);
+      if (play) return play;
+    } else {
+      // Guanyem/empardem però el company no ha tirat 3: truc si es pot,
+      // si no assegurem la baza amb la TOP.
+      const truc = canShoutTruc();
+      if (truc) return truc;
+      const play = findPlay(myHighestTop!.id);
+      if (play) return play;
+    }
+  }
+
+  // Cas 5: només 1 (o 2) 3 sense cap TOP.
+  if (!hasTop && hasThree) {
+    if (partnerPlayedTopOrThree && partnerWinsOrTies) {
+      const play = findPlay(lowest.id);
+      if (play) return play;
+    } else {
+      const play = findPlay(lowestThree!.id);
+      if (play) return play;
+    }
+  }
+
+  // Cas 6: només 1 (o 2) TOP sense cap 3.
+  if (hasTop && !hasThree) {
+    if (partnerPlayedTopOrThree && partnerWinsOrTies) {
+      // Subcas A: tirar la carta més baixa SENSE trucar.
+      const play = findPlay(lowest.id);
+      if (play) return play;
+    } else if (!partnerWinsOrTies) {
+      // Subcas B: 50% de trucar; si es truca, en acceptar el rival tirarem
+      // la TOP en el següent torn. Si no truquem, tirem la TOP igualment
+      // com a únic recurs per intentar guanyar.
+      if (trucNotDecided) {
+        if (Math.random() < 0.5) {
+          const truc = canShoutTruc();
+          if (truc) return truc;
+        }
+        const play = findPlay(myHighestTop!.id);
+        if (play) return play;
+      } else {
+        const play = findPlay(myHighestTop!.id);
+        if (play) return play;
+      }
+    } else {
+      // Cas no cobert (guanyem però sense senyal TOP/3 del company):
+      // reservar la TOP i tirar la baixa.
+      const play = findPlay(lowest.id);
+      if (play) return play;
+    }
+  }
+
+  // Cas 7: sense 3 ni TOP → mai trucar.
+  if (!hasTop && !hasThree) {
+    if (!partnerWinsOrTies) {
+      // Tirar la MÉS ALTA que supere o emparde la mesa (per forçar al
+      // rival a gastar un 3 o TOP). Si cap supera, tirar la més baixa.
+      const winningOrTying = [...hand]
+        .sort((a, b) => cardStrength(b) - cardStrength(a))
+        .find((c) => cardStrength(c) >= oppStr);
+      if (winningOrTying) {
+        const play = findPlay(winningOrTying.id);
+        if (play) return play;
+      }
+      const play = findPlay(lowest.id);
+      if (play) return play;
+    } else {
+      const play = findPlay(lowest.id);
+      if (play) return play;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Aplica les regles de prioritat absoluta (early returns) abans de la
  * lògica genèrica de `botDecideInner`:
  *   · Regla #2: avantatge absolut de Truc en 2a baza (parda) o 3a baza.
@@ -793,6 +1017,11 @@ export function botDecide(
   // altre camí que retorni aquestes accions s'ha de degradar a un
   // nivell més conservador (veure `enforceStrictConservativeLimits`).
   if (priority) return priority;
+
+  // MATRIU EXPLÍCITA de l'usuari (3r a tirar en la 2a baza, havent guanyat
+  // la 1a). Té prioritat absoluta sobre la resta de lògica.
+  const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
+  if (thirdSeatMatrix) return thirdSeatMatrix;
 
   // REGLA ESTRICTA (2a baza, equip ha guanyat la 1a): arbre de decisió
   // definit per l'usuari amb prioritat absoluta sobre la resta de lògica.
