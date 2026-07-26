@@ -314,6 +314,35 @@ interface ShoutBadgeProps {
   quiet?: boolean;
 }
 
+function badgeContent(what: ShoutKind, labelOverride?: string): React.ReactNode {
+  const text = labelOverride ?? LABEL[what];
+  // Els carteles persistents d'envit (amunt dels jugadors) també han de
+  // mostrar "Envide" / "La Falta!" en dues línies exactes, sense saltos
+  // addicionals. El mateix per a "Torne a envidar".
+  if (what === "falta-envit") {
+    return (
+      <>
+        <span className="block whitespace-nowrap">Envide</span>
+        <span className="block whitespace-nowrap">La Falta!</span>
+      </>
+    );
+  }
+  if (what === "renvit") {
+    const words = text.split(" ");
+    const first = words.slice(0, 2).join(" ");
+    const rest = words.slice(2).join(" ");
+    if (rest) {
+      return (
+        <>
+          <span className="block whitespace-nowrap">{first}</span>
+          <span className="block whitespace-nowrap">{rest}</span>
+        </>
+      );
+    }
+  }
+  return text;
+}
+
 export function ShoutBadge({ what, className, textClassName, labelOverride, quiet }: ShoutBadgeProps) {
   return (
     <div
@@ -326,7 +355,9 @@ export function ShoutBadge({ what, className, textClassName, labelOverride, quie
       )}
       style={{ zIndex: TRUC_Z_INDEX.shout }}
     >
-      <span className={cn("inline-block !font-display", textClassName)}>{labelOverride ?? LABEL[what]}</span>
+      <span className={cn("inline-block !font-display leading-tight text-center", textClassName)}>
+        {badgeContent(what, labelOverride)}
+      </span>
     </div>
   );
 }
