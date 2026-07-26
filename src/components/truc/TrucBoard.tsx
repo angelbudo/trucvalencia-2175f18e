@@ -2636,7 +2636,7 @@ export function TrucBoard(props: TrucBoardProps) {
                     what={envitShoutByPlayer[PARTNER] as ShoutKind}
                     labelOverride={envitShoutLabelByPlayer?.[PARTNER] ?? undefined}
                     textClassName="translate-y-px"
-                    className="max-w-[130px] whitespace-normal leading-tight text-center"
+                    className="max-w-[140px] whitespace-nowrap leading-tight text-center"
                     quiet={(() => { const _o = effectiveEnvitOutcome(PARTNER); return !!_o && _o !== "pending"; })()}
                   />
                   {(() => { const _o = effectiveEnvitOutcome(PARTNER); return _o ? (
