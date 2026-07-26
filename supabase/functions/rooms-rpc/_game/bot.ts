@@ -425,6 +425,11 @@ export function botDecide(
   const priority = applyPriorityRules(m, player, hints);
   if (priority) return priority;
 
+  // MATRIU EXPLÍCITA de l'usuari (3r a tirar en la 2a baza, havent guanyat
+  // la 1a). Té prioritat absoluta sobre la resta de lògica.
+  const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
+  if (thirdSeatMatrix) return thirdSeatMatrix;
+
   let decision = botDecideInner(m, player, partnerAdvice, hints, tuning, bluffRate);
   if (!decision) return decision;
   decision = enforceStrictConservativeLimits(m, player, decision);
