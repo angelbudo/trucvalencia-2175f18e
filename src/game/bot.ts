@@ -1018,6 +1018,11 @@ export function botDecide(
   // nivell més conservador (veure `enforceStrictConservativeLimits`).
   if (priority) return priority;
 
+  // MATRIU EXPLÍCITA de l'usuari (3r a tirar en la 2a baza, havent guanyat
+  // la 1a). Té prioritat absoluta sobre la resta de lògica.
+  const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
+  if (thirdSeatMatrix) return thirdSeatMatrix;
+
   // REGLA ESTRICTA (2a baza, equip ha guanyat la 1a): arbre de decisió
   // definit per l'usuari amb prioritat absoluta sobre la resta de lògica.
   const strictSecond = applySecondTrickWonFirstStrict(m, player, hints);
