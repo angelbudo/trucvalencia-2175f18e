@@ -101,19 +101,30 @@ export function ShoutBubble({ what, className, labelOverride, tailDirection, sty
   const wrapTwoLines = !labelOverride && (what === "renvit" || what === "falta-envit");
   let content: React.ReactNode = text;
   if (wrapTwoLines) {
-    const words = text.split(" ");
-    const splitIdx = what === "renvit" ? 2 : 1;
-    const first = words.slice(0, splitIdx).join(" ");
-    const rest = words.slice(splitIdx).join(" ");
-    if (rest) {
+    if (what === "falta-envit") {
+      // Estructura exacta: "Envide" / "La Falta!" (L mayúscula, 2 línies).
       content = (
         <>
-          <div className="block">{first}</div>
-          <div className="block">{rest}</div>
+          <div className="block">Envide</div>
+          <div className="block">La Falta!</div>
         </>
       );
+    } else {
+      const words = text.split(" ");
+      const splitIdx = 2;
+      const first = words.slice(0, splitIdx).join(" ");
+      const rest = words.slice(splitIdx).join(" ");
+      if (rest) {
+        content = (
+          <>
+            <div className="block">{first}</div>
+            <div className="block">{rest}</div>
+          </>
+        );
+      }
     }
   }
+
   return (
     <div
       className={cn(
