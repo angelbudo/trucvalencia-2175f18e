@@ -686,11 +686,16 @@ function applyPriorityRules(
 
     // ===== Regla #0-quat (PRIORITAT ALTA): 1a baza i sóc el 3r en tirar
     // (2 cartes ja a la mesa) i el meu company ja guanya ESTRICTAMENT
-    // la mesa. No té sentit gastar cap 3 ni carta top: tirar la més baixa. =====
+    // la mesa AMB UNA CARTA DOMINANT (3 o TOP). Només aleshores té
+    // sentit descartar la més baixa: si el company va guanyant amb una
+    // carta feble, encara convé jugar TOP/3 per assegurar o pressionar
+    // el 4t rival, i eixa decisió la resol `applyThirdSeatFirstBaza`. =====
     if (
       r.tricks.length === 1 &&
       tableCards.length === 2 &&
       partnerStrictlyWinning &&
+      partnerCardInTable != null &&
+      (partnerCardInTable.rank === 3 || isTopCard(partnerCardInTable)) &&
       playLowest
     ) {
       return playLowest;
