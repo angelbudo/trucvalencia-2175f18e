@@ -108,6 +108,110 @@ function canCallTrucSecondTrickConservative(
 }
 
 /**
+ * REGLA DE L'USUARI (matriu explícita) — Bot 3r a tirar en la 1a BAZA.
+ *
+ * Principi general: no malgastar cartes altes si el company ja té dominada
+ * la baza; pressionar o assegurar quan el rival va guanyant.
+ *
+ * Precondicions: r.tricks.length === 1, la baza actual té exactament 2
+ * cartes a la mesa, el bot encara no ha jugat en ella i li queden 3 cartes
+ * a la mà.
+ */
+function applyThirdSeatFirstBaza(
+  m: MatchState,
+  player: PlayerId,
+  _hints: BotHints,
+): Action | null {
+  const r = m.round;
+  if (r.phase !== "playing") return null;
+  if (r.tricks.length !== 1) return null;
+  const trick = r.tricks[0];
+  if (!trick || trick.cards.length !== 2) return null;
+  if (r.turn !== player) return null;
+  if (trick.cards.some((tc) => tc.player === player)) return null;
+  const hand = r.hands[player] ?? [];
+  if (hand.length !== 3) return null;
+
+  const myTeam = teamOf(player);
+  const partnerCard =
+    trick.cards.find((tc) => tc.player !== player && teamOf(tc.player) === myTeam) ?? null;
+  const oppCard = trick.cards.find((tc) => teamOf(tc.player) !== myTeam) ?? null;
+  if (!partnerCard || !oppCard) return null;
+
+  const legals = legalActions(m, player);
+  const playActions = legals.filter(
+    (a): a is Extract<Action, { type: "play-card" }> => a.type === "play-card",
+  );
+  if (playActions.length === 0) return null;
+  const findPlay = (cardId: string): Action | null =>
+    playActions.find((a) => a.cardId === cardId) ?? null;
+
+  const partnerStr = cardStrength(partnerCard.card);
+  const oppStr = cardStrength(oppCard.card);
+  const mesaMax = Math.max(partnerStr, oppStr);
+  const partnerWinsOrTies = partnerStr >= oppStr;
+  const partnerPlayedTop = isTopCard(partnerCard.card);
+  const partnerPlayedThree = partnerCard.card.rank === 3;
+  const partnerDominant = partnerPlayedTop || partnerPlayedThree;
+  const topOnTable = isTopCard(partnerCard.card) || isTopCard(oppCard.card);
+
+  const tops = hand.filter(isTopCard);
+  const threes = hand.filter((c) => c.rank === 3);
+
+  const sortedAsc = [...hand].sort((a, b) => cardStrength(a) - cardStrength(b));
+  const lowest = sortedAsc[0]!;
+
+  // Regla 3 (descart): company ja va guanyant/empardant amb 3 o TOP → baixa.
+  if (partnerWinsOrTies && partnerDominant) {
+    const play = findPlay(lowest.id);
+    if (play) return play;
+  }
+
+  // Regla 1: TOP que guanya la baza (strictament) → jugar la TOP més baixa
+  // que guanye (no malgastar la més alta si no cal).
+  const winningTops = tops.filter((c) => cardStrength(c) > mesaMax);
+  if (winningTops.length > 0) {
+    const t = winningTops.reduce((a, b) =>
+      cardStrength(a) <= cardStrength(b) ? a : b,
+    );
+    const play = findPlay(t.id);
+    if (play) return play;
+  }
+
+  // Regla 1.1: cap TOP a la mesa, el company no ha tirat un 3 guanyador/
+  // empardador, i el bot té un 3 que guanya o emparda la mesa → tirar el 3.
+  if (
+    !topOnTable &&
+    !(partnerPlayedThree && partnerWinsOrTies) &&
+    threes.length > 0
+  ) {
+    const winningThree = threes.find((c) => cardStrength(c) >= mesaMax);
+    if (winningThree) {
+      const play = findPlay(winningThree.id);
+      if (play) return play;
+    }
+  }
+
+  // Regla 2: sense 3 ni TOP, però amb alguna carta que supere la mesa i el
+  // rival va guanyant → tirar la MÉS ALTA que supere (pressió al 4t).
+  if (tops.length === 0 && threes.length === 0 && !partnerWinsOrTies) {
+    const beaters = hand.filter((c) => cardStrength(c) > mesaMax);
+    if (beaters.length > 0) {
+      const highest = beaters.reduce((a, b) =>
+        cardStrength(a) >= cardStrength(b) ? a : b,
+      );
+      const play = findPlay(highest.id);
+      if (play) return play;
+    }
+  }
+
+  // Regla 3 (fallback): cap carta pot guanyar/empardar la mesa → descart baix.
+  const fallback = findPlay(lowest.id);
+  if (fallback) return fallback;
+  return null;
+}
+
+/**
  * REGLA DE L'USUARI (matriu explícita) — Bot 3r a tirar en la 2a BAZA
  * havent guanyat el seu equip la 1a baza.
  *
@@ -1022,6 +1126,11 @@ export function botDecide(
   // la 1a). Té prioritat absoluta sobre la resta de lògica.
   const thirdSeatMatrix = applyThirdSeatSecondBazaWonFirst(m, player, hints);
   if (thirdSeatMatrix) return thirdSeatMatrix;
+
+  // MATRIU EXPLÍCITA de l'usuari (3r a tirar en la 1a baza). Prioritat
+  // absoluta sobre la resta de lògica.
+  const thirdSeatFirst = applyThirdSeatFirstBaza(m, player, hints);
+  if (thirdSeatFirst) return thirdSeatFirst;
 
   // REGLA ESTRICTA (2a baza, equip ha guanyat la 1a): arbre de decisió
   // definit per l'usuari amb prioritat absoluta sobre la resta de lògica.
